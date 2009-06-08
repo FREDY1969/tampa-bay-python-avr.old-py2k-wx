@@ -3,7 +3,7 @@
 import word
 
 class jmp(word):
-    def compile(self, source):
+    def compile(self, compiler):
         super(jmp, self).compile(source)
         word.push_flash2(source.next())
     def run(self):
