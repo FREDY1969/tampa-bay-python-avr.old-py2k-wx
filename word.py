@@ -130,7 +130,7 @@ class non_deferrable_word(object):
         self.name = name
         self.min_args_len = 0
         self.max_args_len = 0
-        self.ret_len = 0
+        self.ret_domain = None
         self.left_prec = Left_fun
         self.right_prec = Right_fun
         self.frame_size = 7
@@ -153,9 +153,9 @@ class non_deferrable_word(object):
                               "but no compile_value declared on it for that" %
                                 self.name,
                               compiler.syntaxerror_params())
-        compiler.compile_args(self)
+        compiler.compile_params(self)
         compiler.push(self.word_index)
-        FIX: return domain
+        return self.ret_domain
     def compile_lvalue(self, compiler):
         r''' Returns a domain.
              At run time, returns a pointer to a value in this domain.

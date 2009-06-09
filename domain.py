@@ -9,16 +9,15 @@ class type(domain):
         self.min = min
 
 class number(type):
-    def __init__(self, max, min = 0, binary_pt = 0):
-        super(number, self).__init__(max, min)
-        self.binary_pt = binary_pt
-
-class exact_number(number):
     pass
 
-class approx_number(number):
+class any_precision(number):
+    pass
+
+class fixed_precision(number):
     def __init__(self, max, min, binary_pt, precision):
-        super(approx_number, self).__init__(max, min, binary_pt)
+        super(approx_number, self).__init__(max, min)
+        self.binary_pt = binary_pt
         self.precision = precision
 
 class array(type):
@@ -47,8 +46,11 @@ class constant(domain):
         elif isinstance(type, (string, array)):
             type.max = type.min = len(value)
 
-byte = exact_number(2**8 - 1)
-int = exact_number(2**15 - 1, -(2**15))
-uint = exact_number(2**16 - 1)
-long = exact_number(2**31 - 1, -(2**31))
-ulong = exact_number(2**32 - 1)
+int1 = exact_number(2**7 - 1, -(2**7))
+uint1 = byte = exact_number(2**8 - 1)
+int2 = exact_number(2**15 - 1, -(2**15))
+uint2 = exact_number(2**16 - 1)
+int3 = exact_number(2**23 - 1, -(2**23))
+uint3 = exact_number(2**24 - 1)
+int4 = exact_number(2**31 - 1, -(2**31))
+uint4 = exact_number(2**32 - 1)

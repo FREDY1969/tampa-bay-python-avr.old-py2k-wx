@@ -6,6 +6,7 @@
 
 import word
 import domain
+import number
 
 class compiler(object):
     word_compiler = None
@@ -80,7 +81,7 @@ class compile_word(object):
             'lit' word is not created).
         '''
         token, value = self.compiler.next()
-        if token == 'INT':
+        if token == 'NUMBER':
             ans = value
         elif token == 'WORD':
             ans = value.compile_value(self)
@@ -100,7 +101,14 @@ class compile_word(object):
                 break
             ans = value.compile_value(self, ans)
         return ans
-    def compile_args(self, word):
+    def compile_params(self, word):
+        r'''
+            Returns the number of parameters passed.
+        '''
+        token, value = self.compiler.next()
+        if token == 'START_PARAMS':
+        else:
+            self.compiler.unnext(token, value)
     def series(self):
         # FIX
         pass
@@ -121,7 +129,12 @@ class tokenizer(object):
         nl_escaped = False
         nested_parens = 0
         for line in self.infile:
+            if '#' in line:
+                i = line.index('#')
+                if i == 0 or line[i - 1].isspace():
+                    line = line[:i]
             self.line = line = line.rstrip()
+            if not line: continue
             self.charpos, self.charnum = get_indent(line)
             line = line.lstrip()
             if not nl_escaped and not nested_parens:
@@ -147,16 +160,18 @@ class tokenizer(object):
                     self.charpos += 1
                     self.charnum += 1
                 elif c == '\t':
-                    if intoken:
-                        yield self.end_token(token, base)
-                        intoken = False
-                    self.charpos = ((self.charpos + 7) & ~7) + 1
-                    self.charnum += 1
+                    raise SyntaxError("tabs not allowed",
+                                      self.syntaxerror_params())
                 elif c in '()[]':
                     if intoken:
                         yield self.end_token(token, base)
                         intoken = False
-                    yield c, None
+                        if c == '(':
+                            yield 'START_PARAMS', None
+                        else:
+                            yield c, None
+                    else:
+                        yield c, None
                     self.charpos += 1
                     self.charnum += 1
                     if c in '([': nested_parens += 1
@@ -164,14 +179,15 @@ class tokenizer(object):
                 elif intoken:
                     token += c
                     if token == '0x': base = 16
-                    elif not c.isdigit() and \
+                    elif not c.isdigit() and c not in '.~/' and \
                          (base == 10 or \
                           base == 16 and not c.lower() in 'abcdef'):
                         base = 0
                     self.charpos += 1
                     self.charnum += 1
                 elif c == '#':
-                    break
+                    raise SyntaxError("'#' not preceeded by space",
+                                      self.syntaxerror_params())
                 elif c == '-':
                     if i + 1 < len(line) and not line[i + 1].isspace():
                         c = 'negate'
@@ -182,19 +198,9 @@ class tokenizer(object):
                     self.charpos += 1
                     self.charnum += 1
                 elif c == '\\': # Line continuation must have space before.
-                                # May have \s+#.* after.
-                    j = i + 1
-                    while j < len(line) and line[j].isspace(): j += 1
-                    if j >= len(line) or j > i + 1 and line[j] == '#':
+                    if i + 1 >= len(line):
                         nl_escaped = True
-                    elif c in self.dictionary:
-                        yield 'WORD', self.dictionary[c]
-                        self.charpos += 1
-                        self.charnum += 1
-                    else:
-                        yield 'NAME', c
-                        self.charpos += 1
-                        self.charnum += 1
+                    # else ignore it ...
                 else:
                     token = c
                     base = 10 if c.isdigit() else 0
@@ -203,10 +209,17 @@ class tokenizer(object):
                     intoken = True
             if intoken:
                 yield self.end_token(token, base)
-            yield 'NEWLINE', None
+            if not nl_escaped: yield 'NEWLINE', None
+        yield 'EOF', None
     def end_token(self, token, base):
-        if base:
-            return 'INT', int(token, base)
+        dot_split = token.split('.')
+        if base and len(dot_split) < 3 and '~' not in dot_split[0] and \
+           '/' not in dot_split[0] and \
+           (len(dot_split) < 2 or 
+            dot_split[1].count('~') + dot_split[1].count('/') < 2):
+            if '/' in token:
+                return 'NUMBER', number.any_precision(token, base).to_domain()
+            return 'NUMBER', number.fixed_precision(token, base).to_domain()
         if token in self.dictionary:
             return 'WORD', self.dictionary[token]
         return 'NAME', token
