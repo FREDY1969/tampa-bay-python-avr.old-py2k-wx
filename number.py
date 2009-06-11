@@ -2,6 +2,7 @@
 
 from __future__ import division
 import math
+import domain
 
 def adj_binary_pt(i, old_pt, new_pt):
     r'''
@@ -20,6 +21,16 @@ def adj_binary_pt(i, old_pt, new_pt):
     return int(round(i / 2**delta_pt))
 
 class fixed_precision(object):
+    r'''
+        >>> fixed_precision.from_str('0')
+        0
+        >>> fixed_precision.from_str('123')
+        123
+        >>> fixed_precision.from_str('123.23')
+        123.23~4
+        >>> fixed_precision.from_str('123.23~1')
+        123.227~8
+    '''
     def __init__(self, i, binary_pt):
         self.i = i
         self.binary_pt = binary_pt
@@ -27,7 +38,7 @@ class fixed_precision(object):
     def from_str(cls, str, base = 10):
         if '~' not in str:
             if '.' not in str:
-                n = base * int(str, base)
+                n = int(str, base)
                 precision = 0.5
                 decimal_pt = 0
             else:
@@ -58,9 +69,12 @@ class fixed_precision(object):
                 precision /= base**(len(str) - tilde - 2)
         binary_pt = int(math.ceil(math.log(base, 2)*decimal_pt
                                     - math.log(precision, 2)))
-        i = int(round(float(n) * float(2**self.binary_pt) / base**decimal_pt))
+        i = int(round(float(n) * float(2**binary_pt) / base**decimal_pt))
         return cls(i, binary_pt)
     def __repr__(self):
+        # print "self.i", self.i, "self.binary_pt", self.binary_pt
+        if self.binary_pt == 1 and (self.i & 1) == 0:
+            return repr(self.i >> 1)
         if self.binary_pt < 0:
             return "%r~%r" % (self.i, 2**-(self.binary_pt - 1))
         if self.binary_pt == 0:
@@ -224,6 +238,16 @@ class fixed_precision(object):
                                                       self.binary_pt))
 
 class any_precision(object):
+    r'''
+        >>> any_precision.from_str('0/')
+        0/
+        >>> any_precision.from_str('123/')
+        123/
+        >>> any_precision.from_str('123.23/')
+        123.23/
+        >>> any_precision.from_str('123.23/64')
+        123.23/64
+    '''
     def __init__(self, numerator, denominator = 1):
         self.numerator = numerator
         self.denominator = denominator
@@ -251,6 +275,7 @@ class any_precision(object):
     def __repr__(self):
         i = self.numerator // self.denominator
         if i == 0:
+            if self.numerator == 0: return "0/"
             return "%r/%r" % (self.numerator, self.denominator)
         r = self.numerator - self.denominator * i
         if r == 0:
