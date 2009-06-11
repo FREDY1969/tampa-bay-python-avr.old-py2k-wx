@@ -70,11 +70,6 @@ class compile_word(object):
     def push2(self, x):
         self.push(x & 0xff)
         self.push(x >> 8)
-    def compile_arglist(self, word):
-        r'''
-            Reads the rest of the names on the same line.  Defaults have '='
-            expr after the name.
-        '''
     def compile_expr(self, rprec = 0):
         r'''
             Returns the domain.  Literals are not pushed into code (i.e., a
@@ -107,8 +102,19 @@ class compile_word(object):
         '''
         token, value = self.compiler.next()
         if token == 'START_PARAMS':
+            end_token = (')',)
+            token, value = self.compiler.next()
         else:
+            end_token = (':', 'NEWLINE', 'EOF')
+        i = 0
+        while token not in end_token:
             self.compiler.unnext(token, value)
+            self.compile_expr().coerce(word.arg_domains[i])
+            token, value = self.compiler.next()
+            i += 1
+        if token != ')':
+            self.compiler.unnext(token, value)
+        return i
     def series(self):
         # FIX
         pass
@@ -218,8 +224,10 @@ class tokenizer(object):
            (len(dot_split) < 2 or 
             dot_split[1].count('~') + dot_split[1].count('/') < 2):
             if '/' in token:
-                return 'NUMBER', number.any_precision(token, base).to_domain()
-            return 'NUMBER', number.fixed_precision(token, base).to_domain()
+                return 'NUMBER', number.any_precision.from_str(token, base) \
+                                       .to_domain()
+            return 'NUMBER', number.fixed_precision.from_str(token, base) \
+                                   .to_domain()
         if token in self.dictionary:
             return 'WORD', self.dictionary[token]
         return 'NAME', token

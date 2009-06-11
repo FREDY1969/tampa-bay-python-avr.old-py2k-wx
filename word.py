@@ -121,7 +121,7 @@ Left_plus, Right_plus = 20, 30                  # left assoc
 Left_minus, Right_minus = 20, 30                # left assoc
 Left_divide, Right_divide = 50, 40              # right assoc
 Left_multiply, Right_multiply = 60, 70          # left assoc
-Left_negate, Right_negate = 0, 80               # unary
+Left_negate, Right_negate = 0, 30               # unary
 
 class DupWord(Exception): pass
 
