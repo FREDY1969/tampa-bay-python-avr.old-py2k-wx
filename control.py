@@ -1,5 +1,7 @@
 # control.py
 
+# This is just some _very_ preliminary thinking!  -- bruce
+
 import word
 
 class jmp(word):
