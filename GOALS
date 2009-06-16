@@ -45,4 +45,4 @@ allowing the macro function to get information about:
 
     3.  The parent AST structure (what's expected of it by its caller).  This
         may just be handled by a set of methods for the macro: compile_value,
-        compile_lvalue, compile_condition, etc.
+        compile_lvalue, compile_condition, etc?

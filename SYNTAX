@@ -8,7 +8,7 @@ So operators only act on singletons.
 
 Note:
     - don't need (x) without operator before or after
-    - (a b) not legal as expr
+    - (a b) not normally legal as expr
 
 Functions can be turned into singletons by enclosing them in parens:
 
