@@ -66,10 +66,8 @@ class App(object):
                                           usehullsize=1)
         self.word_body.pack(expand=1, fill='both')
 
-        self.select_word()
-
     def new(self):
-        self.selected_word = word.new(self)
+        self.selected_word = word.new()
         self.word_list.setlist(
           sorted((self.selected_word.name,) + self.word_list.get()))
         self.words[self.selected_word.name] = self.selected_word.id
@@ -92,15 +90,14 @@ class App(object):
 
     def select_word(self):
         word_name = self.cur_word()
-        self.selected_word = word.from_db(self.words[word_name], self)
+        self.selected_word = word.from_db(self.words[word_name])
         self.selected_word.display()
 
     def run(self):
         self.root.mainloop()
 
 class word(object):
-    def __init__(self, id, name, app, kind, defining_word):
-        self.app = app
+    def __init__(self, id, name, kind, defining_word):
         self.id = id
         self.name = name
         self.kind = kind
@@ -118,14 +115,14 @@ class word(object):
             self.filename = ''
 
     @classmethod
-    def from_db(cls, id, app):
+    def from_db(cls, id):
         print "id:", repr(id)
         db_cur.execute("""select name, kind, defining_word
                             from word
                           where id = ?
                        """, (id,))
         name, kind, defining_word = db_cur.fetchone()
-        ans = cls(id, name, app, kind, defining_word)
+        ans = cls(id, name, kind, defining_word)
         if ans.filename:
             with open(ans.filename) as f:
                 ans.file_contents = f.read()
@@ -133,7 +130,7 @@ class word(object):
         return ans
 
     @classmethod
-    def new(cls, app):
+    def new(cls):
         db_cur.execute("""select name, id from word where defining_word = 1""")
         kinds = dict(db_cur)
         for kind in sorted(kinds.keys()): print kind
@@ -150,7 +147,7 @@ class word(object):
                            """, (name, kind, defining_word))
             print "lastrowid:", db_cur.lastrowid
             id = db_cur.lastrowid
-            ans = cls(id, name, app, kind, kind == 1)
+            ans = cls(id, name, kind, kind == 1)
             if ans.filename:
                 open(ans.filename, 'w').close()
                 ans.file_contents = ''
@@ -162,38 +159,42 @@ class word(object):
         return ans
 
     def display(self):
-        self.app.top_pane.configure(label_text="%s %s" % (self.kind_name,
-                                                           self.name))
-        for a in self.answers: a.dump()
+        app.top_pane.configure(label_text="%s %s" % (self.kind_name, self.name))
+        answer.display_list(self.answers)
         if self.filename:
-            self.app.word_body.setvalue(self.file_contents)
+            app.word_body.setvalue(self.file_contents)
         else:
-            self.app.word_body.clear()
+            app.word_body.clear()
 
     def save(self):
         if self.filename:
-            self.app.word_body.exportfile(self.filename)
-            self.file_contents = self.app.word_body.get()
+            app.word_body.exportfile(self.filename)
+            self.file_contents = app.word_body.get()
 
     def changed(self):
-        return self.filename and self.file_contents != self.app.word_body.get()
+        return self.filename and self.file_contents != app.word_body.get()
 
 
 class answer(object):
-    def __init__(self, id, question_text, text):
+    def __init__(self, id, question_id, question_text, text):
         self.id = id
+        self.question_id = question_id
         self.question_text = question_text
         self.text = text
+        with contextlib.closing(db_conn.cursor()) as cur:
+            cur.execute("""select answer from answer
+                            where question_id = ? and parent = ?
+                        """, (repeatable_qid, question_id,))
 
     @classmethod
     def new(cls, word_id, question_id, question_text, position):
-        db_cur.execute("""insert into answer (question_id, position, word_id,
-                                              answer)
-                          values (?, ?, ?, '')
-                       """, (question_id, position, word_id))
-        id = db_cur.lastrowid
-        ans = cls(id, question_text, '')
         with contextlib.closing(db_conn.cursor()) as cur:
+            cur.execute("""insert into answer (question_id, position, word_id,
+                                               answer)
+                           values (?, ?, ?, '')
+                        """, (question_id, position, word_id))
+            id = db_cur.lastrowid
+            ans = cls(id, question_text, '')
             cur.execute("""select answer.id,
                                   ifnull(meta.answer, answer.answer),
                                   answer.position
@@ -201,20 +202,20 @@ class answer(object):
                              on cast(answer.answer as int) = meta.id
                                 inner join answer as repeatable
                              on answer.id = repeatable.parent
-                           where answer.parent = ? and answer.question_id = 2
-                             and repeatable.question_id = 3
+                           where answer.parent = ? and answer.question_id = ?
+                             and repeatable.question_id = ?
                              and repeatable.answer = 'False'
                            order by answer.position
-                        """, (question_id,))
+                        """, (question_id, subquestion_qid, repeatable_qid))
             ans.children = tuple(map(lambda row: answer.new(word_id, *row),
                                      cur))
         return ans
 
     @classmethod
-    def from_db(cls, id, question_text, text):
-        ans = cls(id, question_text, text)
+    def from_db(cls, id, question_id, question_text, text):
+        ans = cls(id, question_id, question_text, text)
         with contextlib.closing(db_conn.cursor()) as cur:
-            cur.execute("""select answer.id,
+            cur.execute("""select answer.id, question.id,
                                   ifnull(meta.answer, question.answer),
                                   answer.answer
                            from answer inner join answer as question
@@ -227,20 +228,30 @@ class answer(object):
             ans.children = tuple(map(lambda row: answer.from_db(*row), cur))
         return ans
 
-    def dump(self, indent = 0):
+    @staticmethod
+    def display_list(l, indent = 0, row = 0):
+        for a in l[:-1]:
+            row = a.display(indent, row, False)
+        if l:
+            return l[-1].display(indent, row, True)
+        else:
+            return row
+
+    def display(self, indent, row, last):
         print ' ' * indent + "%s: %s" % (self.question_text, self.text)
-        for child in self.children:
-            child.dump(indent + 4)
+        return answer.display_list(self.children, indent + 4, row + 1)
 
 def get_answers(word_id):
-    db_cur.execute("""select answer.id, ifnull(meta.answer, question.answer),
+    db_cur.execute("""select answer.id,
+                             question.id,
+                             ifnull(meta.answer, question.answer),
                              answer.answer
-                      from answer inner join answer as question
-                        on answer.question_id = question.id
-                           left outer join answer as meta
-                           on cast(question.answer as int) = meta.id
-                      where answer.word_id = ? and answer.parent is null
-                      order by question.position, answer.position
+                        from answer inner join answer as question
+                          on answer.question_id = question.id
+                             left outer join answer as meta
+                          on cast(question.answer as int) = meta.id
+                       where answer.word_id = ? and answer.parent is null
+                       order by question.position, answer.position
                    """, (word_id,))
     return tuple(map(lambda row: answer.from_db(*row), db_cur))
 
@@ -249,10 +260,10 @@ def create_answers(kind, word_id):
                       from answer inner join answer as repeatable
                         on answer.id = repeatable.parent
                       where answer.question_id = 1 and answer.parent is null
-                        and repeatable.question_id = 3
+                        and repeatable.question_id = ?
                         and repeatable.answer = 'False'
                       order by answer.position
-                   """)
+                   """, (repeatable_qid,))
     return tuple(map(lambda row: answer.new(word_id, *row), db_cur))
 
 #w = Entry(???)
@@ -270,11 +281,36 @@ dir = sys.argv[1]
 
 with contextlib.closing(db.connect(os.path.join(dir, db_filename))) as db_conn:
     with contextlib.closing(db_conn.cursor()) as db_cur:
-        db_cur.execute("""select id
+        db_cur.execute("""select id, answer
                           from answer
-                          where word_id = 1 and answer = 'filename suffix'
+                          where word_id = 1
+                          order by id
                        """)
-        filename_suffix_qid = db_cur.fetchone()[0]
+        question_qid = repeatable_qid = subquestion_qid = \
+          filename_suffix_qid = None
+        for id, question in db_cur:
+            print "id:", id, "question:", question
+            if question == 'question':
+                question_qid = id
+            elif question == 'repeatable':
+                repeatable_qid = id
+            elif question.isdigit() and int(question) == question_qid:
+                subquestion_qid = id
+            elif question == 'filename suffix':
+                filename_suffix_qid = id
+        assert question_qid, \
+               "failed to find the 'question' compiler question"
+        assert repeatable_qid, \
+               "failed to find the 'repeatable' compiler question"
+        assert subquestion_qid, \
+               "failed to find the 'subquestion' compiler question"
+        assert filename_suffix_qid, \
+               "failed to find the 'filename suffix' compiler question"
+        print "question_qid:", question_qid
+        print "repeatable_qid:", repeatable_qid
+        print "subquestion_qid:", subquestion_qid
         print "filename_suffix_qid:", filename_suffix_qid
-        App().run()
+        app = App()
+        app.select_word()
+        app.run()
 
