@@ -6,7 +6,7 @@ create table word (
     id int not null primary key,
     name varchar(255) not null,
     kind int not null references word(id),
-    defining_word bool not null default false,
+    defining_word int not null default 0,
     file_suffix varchar(10),    -- only for defining words, null if no file req
     unique (name)
 );

@@ -1,7 +1,6 @@
-question (true, 1, (repeatable, position, subquestions))
-    - repeatable (false, 1, ())
-    - position (false, 2, ())
-    - subquestions (true, 3, (question))
+question (true, (repeatable, position, subquestions))
+    - repeatable (false, ())
+    - subquestions (true, (question))
 
 question
 repeatable

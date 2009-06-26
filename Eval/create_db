@@ -11,7 +11,14 @@ usage() {
 
 [ $# -eq 1 ] || usage
 
-database="$1/python-avr.db"
+directory="$1"
+
+if [ ! -d "$directory" ]
+then
+    mkdir "$directory"
+fi
+
+database="$directory/python-avr.db"
 
 rm -f "$database"
 
