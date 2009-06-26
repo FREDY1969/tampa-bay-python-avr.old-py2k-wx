@@ -34,6 +34,8 @@ class App(object):
         vert_pane.add('list', min=200)
         db_cur.execute("select name, id from word order by name")
         self.words = dict(db_cur)
+        self.words_by_id = dict(zip(self.words.itervalues(),
+                                    self.words.iterkeys()))
         word_list = sorted(self.words.keys())
         print "word_list:", word_list
         self.word_list = Pmw.ScrolledListBox(vert_pane.pane('list'),
@@ -50,7 +52,15 @@ class App(object):
                                     orient='vertical')
         horz_pane.pack(expand=1, fill='both')
         horz_pane.add('top', min=200)
-        self.top_pane = horz_pane.pane('top')
+        self.top_pane = Pmw.ScrolledFrame(horz_pane.pane('top'),
+                                          horizflex='elastic',
+                                          hscrollmode='none',
+                                          labelpos='n',
+                                          vertflex='expand',
+                                          vertfraction=0.15,
+                                          usehullsize=1)
+        self.top_pane.pack(expand=1, fill='both')
+
         horz_pane.add('bottom')
         self.word_body = Pmw.ScrolledText(horz_pane.pane('bottom'),
                                           usehullsize=1)
@@ -94,6 +104,7 @@ class word(object):
         self.id = id
         self.name = name
         self.kind = kind
+        self.kind_name = app.words_by_id[kind]
         self.defining_word = defining_word
         db_cur.execute("""select answer 
                           from answer
@@ -103,8 +114,6 @@ class word(object):
         if filename_suffix:
             self.filename = os.path.join(dir, '.'.join((self.name,
                                                         filename_suffix)))
-            with open(self.filename) as f:
-                self.file_contents = f.read()
         else:
             self.filename = ''
 
@@ -117,6 +126,9 @@ class word(object):
                        """, (id,))
         name, kind, defining_word = db_cur.fetchone()
         ans = cls(id, name, app, kind, defining_word)
+        if ans.filename:
+            with open(ans.filename) as f:
+                ans.file_contents = f.read()
         ans.answers = get_answers(id)
         return ans
 
@@ -141,6 +153,7 @@ class word(object):
             ans = cls(id, name, app, kind, kind == 1)
             if ans.filename:
                 open(ans.filename, 'w').close()
+                ans.file_contents = ''
             ans.answers = create_answers(kind, id)
         except Exception:
             db_conn.rollback()
@@ -149,6 +162,8 @@ class word(object):
         return ans
 
     def display(self):
+        self.app.top_pane.configure(label_text="%s %s" % (self.kind_name,
+                                                           self.name))
         for a in self.answers: a.dump()
         if self.filename:
             self.app.word_body.setvalue(self.file_contents)

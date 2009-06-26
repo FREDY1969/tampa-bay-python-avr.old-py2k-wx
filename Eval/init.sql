@@ -2,7 +2,7 @@
 
 -- words:
 insert into word (id, name, kind, defining_word)
-values (1, 'defining', 1, 1);
+values (1, 'compiler', 1, 1);
 
 insert into word (id, name, kind, defining_word)
 values (2, 'const', 1, 1);
@@ -19,7 +19,7 @@ values (5, 'task', 1, 1);
 
 -- answers:
 
--- for 'defining':
+-- for 'compiler':
 
 -- answers to: 'question':
 
