@@ -20,10 +20,10 @@ class App(object):
         self.root = Tk()
 
         menubar = Menu(self.root)
-        menubar.add_command(label="Quit", command=self.root.quit)
         menubar.add_command(label="New", command=self.new)
         menubar.add_command(label="Save", command=self.save)
         menubar.add_command(label="Edit", command=self.edit)
+        menubar.add_command(label="Quit", command=self.root.quit)
 
         self.root.config(menu=menubar)
 
@@ -68,8 +68,7 @@ class App(object):
 
     def edit(self):
         if self.selected_word.filename:
-            print "edit called"
-            subprocess.check_call(('vi', self.selected_word.filename),
+            subprocess.check_call(('gvim', '-f', self.selected_word.filename),
                                   close_fds=True)
             with open(self.selected_word.filename) as f:
                 self.selected_word.file_contents = f.read()
