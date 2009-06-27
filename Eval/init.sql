@@ -19,6 +19,27 @@ values (5, 'task', 1, 1);
 
 -- answers:
 
+-- word_id|parent|question_id|position|id|answer
+-- 
+-- 1||1:question|1|             1|question
+--   1|1|2:subquestion|1|       3|repeatable
+--     1|3|3:repeatable|1|      6|False
+--   1|1|2:subquestion|2|       2|1
+--   1|1|3:repeatable|1|        5|True
+-- 1||1:question|2|             4|filename suffix
+--   1|4|3:repeatable|1|        8|False
+-- 1||4:filename suffix|1|      9|
+-- 
+-- 2||1:question|1|             10|value
+--   2|10|3:repeatable|1|       11|False
+-- 2||4:filename suffix|1|      12|
+-- 3||1:question|1|             13|initial value
+--   3|13|3:repeatable|1|       14|False
+-- 3||4:filename suffix|1|      15|
+-- 4||4:filename suffix|1|      16|cpl
+-- 5||4:filename suffix|1|      17|cpl
+
+
 -- for 'compiler':
 
 -- answers to: 'question':

@@ -50,7 +50,7 @@ class App(object):
         self.word_list.pack(expand=1, fill='both')
         self.word_list.setvalue(word_list[0].encode())
         vert_pane.add('word-view')
-
+
         horz_pane = Pmw.PanedWidget(vert_pane.pane('word-view'),
                                     orient='vertical')
         horz_pane.pack(expand=1, fill='both')
@@ -110,7 +110,7 @@ class word(object):
 
     def __repr__(self):
         return "<word %s>" % self.name
-
+
     def read_suffix(self):
         db_cur.execute("""select answer 
                           from answer
@@ -169,7 +169,7 @@ class word(object):
             raise
         db_conn.commit()
         return ans
-
+
     def display(self):
         app.top_pane.configure(label_text="%s %s" % (self.kind_name, self.name))
         for w in app.top_pane.interior().grid_slaves():
@@ -183,9 +183,15 @@ class word(object):
             app.word_body.clear()
 
     def save(self):
-        if self.filename:
-            app.word_body.exportfile(self.filename)
-            self.file_contents = app.word_body.get()
+        try:
+            for a in self.answers: a.save()
+            if self.filename:
+                app.word_body.exportfile(self.filename)
+                self.file_contents = app.word_body.get()
+        except Exception:
+            db_conn.rollback()
+            raise
+        db_conn.commit()
 
     def changed(self):
         return self.filename and self.file_contents != app.word_body.get()
@@ -218,6 +224,9 @@ class placeholder(object):
         self.question_text = question_text
         self.repeatable = True
 
+    def __repr__(self):
+        return "<placeholder %s.%s>" % (self.the_word.name, self.question_text)
+
     def display(self, indent, row, next):
         frame = app.top_pane.interior()
         Button(frame, anchor=W,
@@ -225,7 +234,7 @@ class placeholder(object):
                padx=3, pady=0, command=self.add) \
           .grid(row=row, column=2, sticky=E+W)
         return row + 1
-
+
     def add(self):
         if self.parent:
             db_cur.execute("""select max(position)
@@ -247,14 +256,18 @@ class placeholder(object):
             last_position = row[0]
         else:
             last_position = 0
+        if debug: print "answer.add: last_position %s" % last_position
         answer.new(self.the_word, self.parent, self.question_id,
                    self.qid_for_children, self.question_text,
-                   self.repeatable, last_position + 1)
+                   'False', last_position + 1)
         db_conn.commit()
         self.the_word.get_answers()
         self.the_word.display()
 
     def delete2(self):
+        pass
+
+    def save(self):
         pass
 
 
@@ -275,6 +288,11 @@ class answer(placeholder):
                 print "answer: question_text", question_text, \
                       "repeatable", self.repeatable
 
+    def __repr__(self):
+        return "<answer %s.%s[%s] = %s>" % \
+                 (self.the_word.name, self.question_text, self.position,
+                  self.text)
+
     @classmethod
     def new(cls, the_word, parent, question_id, qid_for_children, question_text,
             repeatable, position):
@@ -289,11 +307,12 @@ class answer(placeholder):
             return placeholder(the_word, parent, question_id,
                                qid_for_children, question_text)
         with contextlib.closing(db_conn.cursor()) as cur:
-            cur.execute("""insert into answer (question_id, position, word_id,
-                                               answer)
-                           values (?, ?, ?, '')
-                        """, (question_id, position, the_word.id))
-            id = db_cur.lastrowid
+            cur.execute("""insert into answer (question_id, parent, position,
+                                               word_id, answer)
+                           values (?, ?, ?, ?, '')
+                        """, (question_id, parent, position, the_word.id))
+            id = cur.lastrowid
+            if debug: print "answer.new inserted", id
             ans = cls(the_word, parent, id, question_id, qid_for_children,
                       question_text, '', position)
             cur.execute("""select answer.id,
@@ -305,12 +324,14 @@ class answer(placeholder):
                              on cast(answer.answer as int) = meta.id
                                 inner join answer as repeatable
                              on ifnull(meta.id, answer.id) = repeatable.parent
-                           where answer.parent = ? and answer.question_id = ?
+                           where answer.parent = ?
+                             and answer.question_id in (?, ?)
                              and repeatable.question_id = ?
                            order by answer.position
-                        """, (question_id, subquestion_qid, repeatable_qid))
+                        """, (qid_for_children, question_id, subquestion_qid,
+                              repeatable_qid))
             ans.children = tuple(map(lambda row: answer.new(the_word, id, *row),
-                                     cur))
+                                     debug_iter(cur, "answer.new")))
         return ans
 
     @classmethod
@@ -324,6 +345,7 @@ class answer(placeholder):
                     (qid_for_children, question_text)
             print "                repeatable %s, text %s, position %s" % \
                     (repeatable, text, position)
+
         if text is None:
             if repeatable == 'True':
                 return placeholder(the_word, parent, question_id,
@@ -331,6 +353,7 @@ class answer(placeholder):
             else:
                 raise AssertionError("unanswered non-repeatable question: " +
                                        question_text)
+
         ans = cls(the_word, parent, id, question_id, qid_for_children,
                   question_text, text, position)
         if question_id in (question_qid, subquestion_qid) and text.isdigit():
@@ -358,7 +381,7 @@ class answer(placeholder):
                             """, (id, qid_for_children, repeatable_qid))
                 ans.children = tuple(map(lambda row:
                                            answer.from_db(the_word, id, *row),
-                                         cur))
+                                         debug_iter(cur, "answer.from_db")))
         return ans
 
     @staticmethod
@@ -379,9 +402,10 @@ class answer(placeholder):
                   .grid(row=row, column=3, sticky=E+W)
         Label(frame, text=' ' * indent + self.question_text, anchor=W) \
           .grid(row=row, column=2, sticky=E+W)
-        e = Entry(frame)
-        e.insert(END, self.text)
-        e.grid(row=row, column=4, sticky=E+W)
+        self.entry = Entry(frame)
+        self.entry.insert(END, self.text)
+        self.entry.grid(row=row, column=4, sticky=E+W)
+        self.entry.bind("<FocusOut>", self.check_entry)
         Label(frame, text=str(self.id), justify=RIGHT) \
           .grid(row=row, column=5, sticky=E+W)
         row = answer.display_list(self.children, indent + 4, row + 1)
@@ -393,7 +417,7 @@ class answer(placeholder):
               .grid(row=row, column=2, sticky=E+W)
             return row + 1
         return row
-
+
     def delete(self):
         self.delete2()
         db_conn.commit()
@@ -401,6 +425,7 @@ class answer(placeholder):
         self.the_word.display()
 
     def delete2(self):
+        if debug: print "deleting answer", self.id
         db_cur.execute("""delete from answer where id = ?""", (self.id,))
         for child in self.children:
             child.delete2()
@@ -413,14 +438,40 @@ class answer(placeholder):
                "bogus next to move_down: " \
                "my parent is %s, next's parent is %s" % \
                  (self.parent, next.parent)
+        if debug:
+            print "setting answer[%s].position = %s" % (self.id, next.position)
         db_cur.execute("""update answer set position = ? where id = ?""",
                        (next.position, self.id))
+        if debug:
+            print "setting answer[%s].position = %s" % (next.id, self.position)
         db_cur.execute("""update answer set position = ? where id = ?""",
                        (self.position, next.id))
         db_conn.commit()
         self.the_word.get_answers()
         self.the_word.display()
 
+    def check_entry(self, *args):
+        if self.entry.get() != self.text:
+            try:
+                self.save()
+            except Exception:
+                db_conn.rollback()
+                raise
+            db_conn.commit()
+
+    def save(self):
+        cur_text = self.entry.get()
+        if cur_text != self.text:
+            self.text = cur_text
+            db_cur.execute("""update answer set answer = ? where id = ?""",
+                           (cur_text, self.id))
+
+def debug_iter(it, msg):
+    if debug: print "debug_iter:", msg
+    for x in it:
+        if debug: print "debug_iter:", x
+        yield x
+    if debug: print "debug_iter: done"
 
 def get_answers(the_word, kind):
     db_cur.execute("""select answer.id,
@@ -441,8 +492,9 @@ def get_answers(the_word, kind):
                          and repeatable.question_id = ?
                        order by question.position, answer.position
                    """, (the_word.id, kind, repeatable_qid))
-    return tuple(map(lambda row: answer.from_db(the_word, None, *row), db_cur))
-
+    return tuple(map(lambda row: answer.from_db(the_word, None, *row),
+                     debug_iter(db_cur, "get_answers")))
+
 def create_answers(kind, the_word):
     db_cur.execute("""select answer.id, ifnull(meta.id, answer.id),
                              answer.answer, repeatable.answer, answer.position
@@ -454,12 +506,8 @@ def create_answers(kind, the_word):
                         and repeatable.question_id = ?
                       order by answer.position
                    """, (kind, repeatable_qid))
-    return tuple(map(lambda row: answer.new(the_word, None, *row), db_cur))
-
-#w = Entry(???)
-#W = Text(???)
-#w = Label(root, text="Hello, world!")
-#w.pack()
+    return tuple(map(lambda row: answer.new(the_word, None, *row),
+                     debug_iter(db_cur, "create_answers")))
 
 
 def run():
@@ -477,7 +525,7 @@ def run():
         with contextlib.closing(db_conn.cursor()) as db_cur:
             db_cur.execute("""select id, answer
                               from answer
-                              where word_id = 1
+                              where word_id = 1 and question_id in (1, 2)
                               order by id
                            """)
             question_qid = repeatable_qid = subquestion_qid = \
