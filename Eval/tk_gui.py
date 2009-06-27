@@ -7,11 +7,14 @@ from __future__ import with_statement
 import sys
 import os.path
 import contextlib
+import functools
 import subprocess
 
 from Tkinter import *
 import Pmw
 import sqlite3 as db
+
+debug = True
 
 db_filename = 'python-avr.db'
 
@@ -37,7 +40,7 @@ class App(object):
         self.words_by_id = dict(zip(self.words.itervalues(),
                                     self.words.iterkeys()))
         word_list = sorted(self.words.keys())
-        print "word_list:", word_list
+        if debug: print "word_list:", word_list
         self.word_list = Pmw.ScrolledListBox(vert_pane.pane('list'),
                                              items=word_list,
                                              labelpos='nw',
@@ -116,7 +119,7 @@ class word(object):
 
     @classmethod
     def from_db(cls, id):
-        print "id:", repr(id)
+        if debug: print "id:", repr(id)
         db_cur.execute("""select name, kind, defining_word
                             from word
                           where id = ?
@@ -126,7 +129,7 @@ class word(object):
         if ans.filename:
             with open(ans.filename) as f:
                 ans.file_contents = f.read()
-        ans.answers = get_answers(id)
+        ans.answers = get_answers(id, kind)
         return ans
 
     @classmethod
@@ -145,7 +148,7 @@ class word(object):
             db_cur.execute("""insert into word (name, kind, defining_word)
                               values (?, ?, ?)
                            """, (name, kind, defining_word))
-            print "lastrowid:", db_cur.lastrowid
+            if debug: print "lastrowid:", db_cur.lastrowid
             id = db_cur.lastrowid
             ans = cls(id, name, kind, kind == 1)
             if ans.filename:
@@ -160,7 +163,11 @@ class word(object):
 
     def display(self):
         app.top_pane.configure(label_text="%s %s" % (self.kind_name, self.name))
+        for w in app.top_pane.interior().grid_slaves():
+            if debug: print "destroying:", w
+            w.destroy()
         answer.display_list(self.answers)
+        app.top_pane.reposition()
         if self.filename:
             app.word_body.setvalue(self.file_contents)
         else:
@@ -175,96 +182,222 @@ class word(object):
         return self.filename and self.file_contents != app.word_body.get()
 
 
-class answer(object):
-    def __init__(self, id, question_id, question_text, text):
-        self.id = id
+def pairs(it):
+    r'''Yields sliding pairs of items from it iterable.
+
+    >>> list(pairs(()))
+    []
+    >>> list(pairs((1,)))
+    [(1, None)]
+    >>> list(pairs((1,2,3)))
+    [(1, 2), (2, 3), (3, None)]
+    '''
+    it = iter(it)
+    last = it.next()
+    for x in it:
+        yield last, x
+        last = x
+    yield last, None
+
+class placeholder(object):
+    def __init__(self, word_id, parent, question_id, question_text):
+        self.word_id = word_id
+        self.parent = parent
         self.question_id = question_id
         self.question_text = question_text
+        self.repeatable = True
+
+    def display(self, indent, row, next):
+        frame = app.top_pane.interior()
+        Button(frame, anchor=W,
+               text=' ' * (indent - 1) + "Add " + self.question_text,
+               padx=3, pady=0, command=self.add) \
+          .grid(row=row, column=2, sticky=E+W)
+        return row + 1
+
+    def add(self):
+        if self.parent:
+            db_cur.execute("""select max(position)
+                                from answer
+                               where answer.parent = ?
+                                 and answer.question_id = ?
+                           """, (self.parent, self.question_id))
+        else:
+            db_cur.execute("""select max(position)
+                                from answer
+                               where answer.parent is null
+                                 and answer.question_id = ?
+                           """, (self.question_id,))
+        row = db_cur.fetchone()
+        if row and row[0]:
+            last_position = row[0]
+        else:
+            last_position = 0
+        print "answer.add", self.parent, last_position + 1, self.question_id, \
+              self.word_id
+
+
+class answer(placeholder):
+    def __init__(self, word_id, parent, id, question_id, qid_for_children,
+                 question_text, text):
+        super(answer, self).__init__(word_id, parent, question_id,
+                                     question_text)
+        self.id = id
+        self.qid_for_children = qid_for_children
         self.text = text
         with contextlib.closing(db_conn.cursor()) as cur:
             cur.execute("""select answer from answer
                             where question_id = ? and parent = ?
-                        """, (repeatable_qid, question_id,))
+                        """, (repeatable_qid, qid_for_children,))
+            self.repeatable = cur.fetchone()[0] == 'True'
+            if debug: print question_text, "repeatable:", self.repeatable
 
     @classmethod
-    def new(cls, word_id, question_id, question_text, position):
+    def new(cls, word_id, parent, question_id, qid_for_children, question_text,
+            repeatable, position):
+        if debug:
+            print "new:", word_id, question_id, qid_for_children, \
+                  question_text, repeatable, position
+        if repeatable == 'True':
+            return placeholder(word_id, parent, question_id, question_text)
         with contextlib.closing(db_conn.cursor()) as cur:
             cur.execute("""insert into answer (question_id, position, word_id,
                                                answer)
                            values (?, ?, ?, '')
                         """, (question_id, position, word_id))
             id = db_cur.lastrowid
-            ans = cls(id, question_text, '')
+            ans = cls(word_id, parent, id, question_id, qid_for_children,
+                      question_text, '')
             cur.execute("""select answer.id,
+                                  ifnull(meta.id, answer.id),
                                   ifnull(meta.answer, answer.answer),
+                                  repeatable.answer,
                                   answer.position
                            from answer left outer join answer as meta
                              on cast(answer.answer as int) = meta.id
                                 inner join answer as repeatable
-                             on answer.id = repeatable.parent
+                             on ifnull(meta.id, answer.id) = repeatable.parent
                            where answer.parent = ? and answer.question_id = ?
                              and repeatable.question_id = ?
-                             and repeatable.answer = 'False'
                            order by answer.position
                         """, (question_id, subquestion_qid, repeatable_qid))
-            ans.children = tuple(map(lambda row: answer.new(word_id, *row),
+            ans.children = tuple(map(lambda row: answer.new(word_id, id, *row),
                                      cur))
         return ans
 
     @classmethod
-    def from_db(cls, id, question_id, question_text, text):
-        ans = cls(id, question_id, question_text, text)
-        with contextlib.closing(db_conn.cursor()) as cur:
-            cur.execute("""select answer.id, question.id,
-                                  ifnull(meta.answer, question.answer),
-                                  answer.answer
-                           from answer inner join answer as question
-                             on answer.question_id = question.id
-                                left outer join answer as meta
-                                on cast(question.answer as int) = meta.id
-                           where answer.parent = ?
-                           order by question.position, answer.position
-                        """, (id,))
-            ans.children = tuple(map(lambda row: answer.from_db(*row), cur))
+    def from_db(cls, word_id, parent, id, question_id, qid_for_children,
+                question_text, repeatable, text):
+        if debug:
+            print "from_db:", id, question_id, qid_for_children, \
+                  question_text, repeatable, text
+        if text is None:
+            if repeatable == 'True':
+                return placeholder(word_id, parent, question_id, question_text)
+            else:
+                raise AssertionError("unanswered non-repeatable question: " +
+                                       question_text)
+        ans = cls(word_id, parent, id, question_id, qid_for_children,
+                  question_text, text)
+        if question_id in (question_qid, subquestion_qid) and text.isdigit():
+            ans.children = ()
+        else:
+            with contextlib.closing(db_conn.cursor()) as cur:
+                cur.execute("""select answer.id, 
+                                      question.id,
+                                      ifnull(meta.id, question.id),
+                                      ifnull(meta.answer, question.answer),
+                                      repeatable.answer,
+                                      answer.answer
+                                 from answer as question left outer join answer
+                                   on question.id = answer.question_id
+                                      and answer.parent = ?
+                                      left outer join answer as meta
+                                   on cast(question.answer as int) = meta.id
+                                      inner join answer as repeatable
+                                   on ifnull(meta.id, question.id) =
+                                        repeatable.parent
+                                where question.parent = ?
+                                  and repeatable.question_id = ?
+                                order by question.position, answer.position
+                            """, (id, qid_for_children, repeatable_qid))
+                ans.children = tuple(map(lambda row:
+                                           answer.from_db(word_id, id, *row),
+                                         cur))
         return ans
 
     @staticmethod
     def display_list(l, indent = 0, row = 0):
-        for a in l[:-1]:
-            row = a.display(indent, row, False)
-        if l:
-            return l[-1].display(indent, row, True)
-        else:
-            return row
+        for a, next in pairs(l):
+            row = a.display(indent, row, next)
+        return row
 
-    def display(self, indent, row, last):
-        print ' ' * indent + "%s: %s" % (self.question_text, self.text)
-        return answer.display_list(self.children, indent + 4, row + 1)
+    def display(self, indent, row, next):
+        frame = app.top_pane.interior()
+        if self.repeatable:
+            Button(frame, anchor=CENTER, text="Del", padx=3, pady=0,
+                   command=self.delete) \
+              .grid(row=row, column=1, sticky=E+W)
+            if next and self.question_id == next.question_id:
+                Button(frame, anchor=CENTER, text="Move Down", padx=3, pady=0,
+                       command=functools.partial(self.move_down, next)) \
+                  .grid(row=row, column=3, sticky=E+W)
+        Label(frame, text=' ' * indent + self.question_text, anchor=W) \
+          .grid(row=row, column=2, sticky=E+W)
+        e = Entry(frame)
+        e.insert(END, self.text)
+        e.grid(row=row, column=4, sticky=E+W)
+        Label(frame, text=str(self.id), justify=RIGHT) \
+          .grid(row=row, column=5, sticky=E+W)
+        row = answer.display_list(self.children, indent + 4, row + 1)
+        if self.repeatable and \
+           (not next or self.question_id != next.question_id):
+            Button(frame, anchor=W,
+                   text=' ' * (indent - 1) + "Add " + self.question_text,
+                   padx=3, pady=0, command=self.add) \
+              .grid(row=row, column=2, sticky=E+W)
+            return row + 1
+        return row
 
-def get_answers(word_id):
+    def delete(self):
+        print "answer.delete:", self.id
+
+    def move_down(self, next):
+        print "answer.move_down", self.id, next.id
+
+
+def get_answers(word_id, kind):
     db_cur.execute("""select answer.id,
                              question.id,
+                             ifnull(meta.id, question.id),
                              ifnull(meta.answer, question.answer),
+                             repeatable.answer,
                              answer.answer
-                        from answer inner join answer as question
-                          on answer.question_id = question.id
+                        from answer as question left outer join answer
+                          on question.id = answer.question_id
+                             and answer.word_id = ?
                              left outer join answer as meta
                           on cast(question.answer as int) = meta.id
-                       where answer.word_id = ? and answer.parent is null
+                             inner join answer as repeatable
+                          on ifnull(meta.id, question.id) = repeatable.parent
+                       where question.word_id = ? and question.parent is null
+                         and repeatable.question_id = ?
                        order by question.position, answer.position
-                   """, (word_id,))
-    return tuple(map(lambda row: answer.from_db(*row), db_cur))
+                   """, (word_id, kind, repeatable_qid))
+    return tuple(map(lambda row: answer.from_db(word_id, None, *row), db_cur))
 
 def create_answers(kind, word_id):
-    db_cur.execute("""select answer.id, answer.answer, answer.position
-                      from answer inner join answer as repeatable
-                        on answer.id = repeatable.parent
-                      where answer.question_id = 1 and answer.parent is null
+    db_cur.execute("""select answer.id, ifnull(meta.id, answer.id),
+                             answer.answer, repeatable.answer, answer.position
+                      from answer left outer join answer as meta
+                        on cast(answer.answer as int) = meta.id
+                           inner join answer as repeatable
+                        on ifnull(meta.id, answer.id) = repeatable.parent
+                      where answer.word_id = ? and answer.parent is null
                         and repeatable.question_id = ?
-                        and repeatable.answer = 'False'
                       order by answer.position
-                   """, (repeatable_qid,))
-    return tuple(map(lambda row: answer.new(word_id, *row), db_cur))
+                   """, (kind, repeatable_qid))
+    return tuple(map(lambda row: answer.new(word_id, None, *row), db_cur))
 
 #w = Entry(???)
 #W = Text(???)
@@ -272,45 +405,51 @@ def create_answers(kind, word_id):
 #w.pack()
 
 
+def run():
+    global dir, db_conn, db_cur, question_qid, repeatable_qid, subquestion_qid
+    global filename_suffix_qid, app
 
-if len(sys.argv) != 2:
-    sys.stderr.write("usage: tk_gui directory\n")
-    sys.exit(2)
+    if len(sys.argv) != 2:
+        sys.stderr.write("usage: tk_gui directory\n")
+        sys.exit(2)
 
-dir = sys.argv[1]
+    dir = sys.argv[1]
 
-with contextlib.closing(db.connect(os.path.join(dir, db_filename))) as db_conn:
-    with contextlib.closing(db_conn.cursor()) as db_cur:
-        db_cur.execute("""select id, answer
-                          from answer
-                          where word_id = 1
-                          order by id
-                       """)
-        question_qid = repeatable_qid = subquestion_qid = \
-          filename_suffix_qid = None
-        for id, question in db_cur:
-            print "id:", id, "question:", question
-            if question == 'question':
-                question_qid = id
-            elif question == 'repeatable':
-                repeatable_qid = id
-            elif question.isdigit() and int(question) == question_qid:
-                subquestion_qid = id
-            elif question == 'filename suffix':
-                filename_suffix_qid = id
-        assert question_qid, \
-               "failed to find the 'question' compiler question"
-        assert repeatable_qid, \
-               "failed to find the 'repeatable' compiler question"
-        assert subquestion_qid, \
-               "failed to find the 'subquestion' compiler question"
-        assert filename_suffix_qid, \
-               "failed to find the 'filename suffix' compiler question"
-        print "question_qid:", question_qid
-        print "repeatable_qid:", repeatable_qid
-        print "subquestion_qid:", subquestion_qid
-        print "filename_suffix_qid:", filename_suffix_qid
-        app = App()
-        app.select_word()
-        app.run()
+    with contextlib.closing(db.connect(os.path.join(dir, db_filename))) \
+      as db_conn:
+        with contextlib.closing(db_conn.cursor()) as db_cur:
+            db_cur.execute("""select id, answer
+                              from answer
+                              where word_id = 1
+                              order by id
+                           """)
+            question_qid = repeatable_qid = subquestion_qid = \
+              filename_suffix_qid = None
+            for id, question in db_cur:
+                if debug: print "id:", id, "question:", question
+                if question == 'question':
+                    question_qid = id
+                elif question == 'repeatable':
+                    repeatable_qid = id
+                elif question.isdigit() and int(question) == question_qid:
+                    subquestion_qid = id
+                elif question == 'filename suffix':
+                    filename_suffix_qid = id
+            assert question_qid, \
+                   "failed to find the 'question' compiler question"
+            assert repeatable_qid, \
+                   "failed to find the 'repeatable' compiler question"
+            assert subquestion_qid, \
+                   "failed to find the 'subquestion' compiler question"
+            assert filename_suffix_qid, \
+                   "failed to find the 'filename suffix' compiler question"
+            if debug: print "question_qid:", question_qid
+            if debug: print "repeatable_qid:", repeatable_qid
+            if debug: print "subquestion_qid:", subquestion_qid
+            if debug: print "filename_suffix_qid:", filename_suffix_qid
+            app = App()
+            app.select_word()
+            app.run()
 
+if __name__ == '__main__':
+    run()

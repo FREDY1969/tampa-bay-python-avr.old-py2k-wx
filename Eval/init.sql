@@ -52,8 +52,8 @@ values (5, 'task', 1, 1);
     values (6, 3, 3, 1, 'False');
 
     -- 'subquestion':
-    insert into answer (id, parent, question_id, word_id, answer)
-    values (7, 2, 3, 1, 'True');
+    --insert into answer (id, parent, question_id, word_id, answer)
+    --values (7, 2, 3, 1, 'True');
 
     -- 'filename suffix':
     insert into answer (id, parent, question_id, word_id, answer)
