@@ -23,7 +23,7 @@ class App(object):
         self.root = Tk()
 
         menubar = Menu(self.root)
-        menubar.add_command(label="New", command=self.new)
+        menubar.add_command(label="New Word", command=self.new)
         menubar.add_command(label="Save", command=self.save)
         menubar.add_command(label="Edit", command=self.edit)
         menubar.add_command(label="Quit", command=self.root.quit)
@@ -50,7 +50,7 @@ class App(object):
         self.word_list.pack(expand=1, fill='both')
         self.word_list.setvalue(word_list[0].encode())
         vert_pane.add('word-view')
-
+
         horz_pane = Pmw.PanedWidget(vert_pane.pane('word-view'),
                                     orient='vertical')
         horz_pane.pack(expand=1, fill='both')
@@ -70,12 +70,13 @@ class App(object):
         self.word_body.pack(expand=1, fill='both')
 
     def new(self):
-        self.selected_word = word.new()
-        self.word_list.setlist(
-          sorted((self.selected_word.name,) + self.word_list.get()))
-        self.words[self.selected_word.name] = self.selected_word.id
-        self.word_list.setvalue(self.selected_word.name)
-        self.selected_word.display()
+        new_word(app.root)
+
+    def add_word(self, name, id):
+        assert name not in self.words, "Duplicate word name: " + name
+        self.word_list.setlist(sorted((name,) + self.word_list.get()))
+        self.words[name] = id
+        self.word_list.setvalue(name)
 
     def edit(self):
         if self.selected_word.filename:
@@ -99,6 +100,60 @@ class App(object):
     def run(self):
         self.root.mainloop()
 
+class new_word(object):
+    def __init__(self, parent, **kws):
+        self.top = Toplevel(parent, height=200, takefocus=True, width=200)
+        self.top.title("New Word")
+        self.top.transient(app.root)
+
+        frame = Frame(self.top)
+        frame.grid(row=1, column=1, columnspan=3, sticky=N+S+E+W)
+
+        db_cur.execute("""select name, id from word where defining_word = 1""")
+        self.kinds = dict(db_cur)
+
+        self.kind = Pmw.ComboBox(frame, labelpos='w', label_text="Kind of Word",
+                                 scrolledlist_items=sorted(self.kinds.keys()))
+        self.kind.grid(row=1, column=1, columnspan=2)
+
+        Label(frame, anchor='w', text="Name").grid(row=2, column=1)
+        self.name = Entry(frame)
+        self.name.grid(row=2, column=2, sticky=E+W)
+
+        Button(self.top, anchor=CENTER, text="Ok", command=self.ok) \
+          .grid(row=2, column=1)
+        Button(self.top, anchor=CENTER, text="Apply", command=self.apply) \
+          .grid(row=2, column=2)
+        Button(self.top, anchor=CENTER, text="Cancel", command=self.cancel) \
+          .grid(row=2, column=3)
+
+    def cancel(self):
+        self.top.destroy()
+
+    def apply(self):
+        try:
+            name = self.name.get()
+            kind_id = self.kinds[self.kind.get()]
+            if debug: print "new_word:", name, kind_id
+            assert name not in app.words, "Duplicate word name: " + name
+            db_cur.execute("""insert into word (name, kind, defining_word)
+                              values (?, ?, ?)
+                           """, (name, kind_id, kind_id == 1))
+            if debug > 2: print "new_word: lastrowid", db_cur.lastrowid
+            id = db_cur.lastrowid
+            create_answers(kind_id, id)
+        except Exception:
+            db_conn.rollback()
+            raise
+        db_conn.commit()
+        app.add_word(name, id)
+
+    def ok(self):
+        self.apply()
+        app.select_word()
+        self.cancel()
+
+
 class word(object):
     def __init__(self, id, name, kind, defining_word):
         self.id = id
@@ -110,7 +165,7 @@ class word(object):
 
     def __repr__(self):
         return "<word %s>" % self.name
-
+
     def read_suffix(self):
         db_cur.execute("""select answer 
                           from answer
@@ -120,6 +175,8 @@ class word(object):
         if filename_suffix:
             self.filename = os.path.join(dir, '.'.join((self.name,
                                                         filename_suffix)))
+            if not os.path.exists(self.filename):
+                open(self.filename, 'w').close()
         else:
             self.filename = ''
 
@@ -141,35 +198,6 @@ class word(object):
         ans.get_answers()
         return ans
 
-    @classmethod
-    def new(cls):
-        db_cur.execute("""select name, id from word where defining_word = 1""")
-        kinds = dict(db_cur)
-        for kind in sorted(kinds.keys()): print kind
-        while True:
-            k = raw_input("which kind? ")
-            if k in kinds:
-                kind = kinds[k]
-                defining_word = kind == 1
-                break
-        name = raw_input("name? ")
-        try:
-            db_cur.execute("""insert into word (name, kind, defining_word)
-                              values (?, ?, ?)
-                           """, (name, kind, defining_word))
-            if debug > 2: print "word.new: lastrowid", db_cur.lastrowid
-            id = db_cur.lastrowid
-            ans = cls(id, name, kind, kind == 1)
-            if ans.filename:
-                open(ans.filename, 'w').close()
-                ans.file_contents = ''
-            ans.answers = create_answers(kind, ans)
-        except Exception:
-            db_conn.rollback()
-            raise
-        db_conn.commit()
-        return ans
-
     def display(self):
         app.top_pane.configure(label_text="%s %s" % (self.kind_name, self.name))
         for w in app.top_pane.interior().grid_slaves():
@@ -234,7 +262,7 @@ class placeholder(object):
                padx=3, pady=0, command=self.add) \
           .grid(row=row, column=2, sticky=E+W)
         return row + 1
-
+
     def add(self):
         if self.parent:
             db_cur.execute("""select max(position)
@@ -257,9 +285,9 @@ class placeholder(object):
         else:
             last_position = 0
         if debug: print "answer.add: last_position %s" % last_position
-        answer.new(self.the_word, self.parent, self.question_id,
-                   self.qid_for_children, self.question_text,
-                   'False', last_position + 1)
+        create_subanswers(self.the_word.id, self.parent, self.question_id,
+                          self.qid_for_children, self.question_text,
+                          'False', last_position + 1)
         db_conn.commit()
         self.the_word.get_answers()
         self.the_word.display()
@@ -292,47 +320,6 @@ class answer(placeholder):
         return "<answer %s.%s[%s] = %s>" % \
                  (self.the_word.name, self.question_text, self.position,
                   self.text)
-
-    @classmethod
-    def new(cls, the_word, parent, question_id, qid_for_children, question_text,
-            repeatable, position):
-        if debug:
-            print "answer.new: the_word %s, parent %s, question_id %s," % \
-                    (the_word, parent, question_id)
-            print "            qid_for_children %s, question_text %s," % \
-                    (qid_for_children, question_text)
-            print "            repeatable %s, position %s" % \
-                    (repeatable, position)
-        if repeatable == 'True':
-            return placeholder(the_word, parent, question_id,
-                               qid_for_children, question_text)
-        with contextlib.closing(db_conn.cursor()) as cur:
-            cur.execute("""insert into answer (question_id, parent, position,
-                                               word_id, answer)
-                           values (?, ?, ?, ?, '')
-                        """, (question_id, parent, position, the_word.id))
-            id = cur.lastrowid
-            if debug: print "answer.new inserted", id
-            ans = cls(the_word, parent, id, question_id, qid_for_children,
-                      question_text, '', position)
-            cur.execute("""select answer.id,
-                                  ifnull(meta.id, answer.id),
-                                  ifnull(meta.answer, answer.answer),
-                                  repeatable.answer,
-                                  answer.position
-                           from answer left outer join answer as meta
-                             on cast(answer.answer as int) = meta.id
-                                inner join answer as repeatable
-                             on ifnull(meta.id, answer.id) = repeatable.parent
-                           where answer.parent = ?
-                             and answer.question_id in (?, ?)
-                             and repeatable.question_id = ?
-                           order by answer.position
-                        """, (qid_for_children, question_id, subquestion_qid,
-                              repeatable_qid))
-            ans.children = tuple(map(lambda row: answer.new(the_word, id, *row),
-                                     debug_iter(cur, "answer.new")))
-        return ans
 
     @classmethod
     def from_db(cls, the_word, parent, id, question_id, qid_for_children,
@@ -353,7 +340,7 @@ class answer(placeholder):
             else:
                 raise AssertionError("unanswered non-repeatable question: " +
                                        question_text)
-
+
         ans = cls(the_word, parent, id, question_id, qid_for_children,
                   question_text, text, position)
         if question_id in (question_qid, subquestion_qid) and text.isdigit():
@@ -417,7 +404,7 @@ class answer(placeholder):
               .grid(row=row, column=2, sticky=E+W)
             return row + 1
         return row
-
+
     def delete(self):
         self.delete2()
         db_conn.commit()
@@ -494,8 +481,8 @@ def get_answers(the_word, kind):
                    """, (the_word.id, kind, repeatable_qid))
     return tuple(map(lambda row: answer.from_db(the_word, None, *row),
                      debug_iter(db_cur, "get_answers")))
-
-def create_answers(kind, the_word):
+
+def create_answers(kind, word_id):
     db_cur.execute("""select answer.id, ifnull(meta.id, answer.id),
                              answer.answer, repeatable.answer, answer.position
                       from answer left outer join answer as meta
@@ -506,8 +493,43 @@ def create_answers(kind, the_word):
                         and repeatable.question_id = ?
                       order by answer.position
                    """, (kind, repeatable_qid))
-    return tuple(map(lambda row: answer.new(the_word, None, *row),
-                     debug_iter(db_cur, "create_answers")))
+    for row in debug_iter(db_cur, "create_answers"):
+        create_subanswers(word_id, None, *row)
+
+def create_subanswers(word_id, parent, question_id, qid_for_children,
+                      question_text, repeatable, position):
+    if debug:
+        print "create_subanswers: word_id %s, parent %s, question_id %s," % \
+                (word_id, parent, question_id)
+        print "                   qid_for_children %s, question_text %s," % \
+                (qid_for_children, question_text)
+        print "                   repeatable %s, position %s" % \
+                (repeatable, position)
+    if repeatable == 'True': return 
+    with contextlib.closing(db_conn.cursor()) as cur:
+        cur.execute("""insert into answer (question_id, parent, position,
+                                           word_id, answer)
+                       values (?, ?, ?, ?, '')
+                    """, (question_id, parent, position, word_id))
+        id = cur.lastrowid
+        if debug: print "create_subanswer inserted", id
+        cur.execute("""select answer.id,
+                              ifnull(meta.id, answer.id),
+                              ifnull(meta.answer, answer.answer),
+                              repeatable.answer,
+                              answer.position
+                       from answer left outer join answer as meta
+                         on cast(answer.answer as int) = meta.id
+                            inner join answer as repeatable
+                         on ifnull(meta.id, answer.id) = repeatable.parent
+                       where answer.parent = ?
+                         and answer.question_id in (?, ?)
+                         and repeatable.question_id = ?
+                       order by answer.position
+                    """, (qid_for_children, question_id, subquestion_qid,
+                          repeatable_qid))
+        for row in debug_iter(cur, "create_subanswers"):
+            create_subanswer(word_id, id, *row)
 
 
 def run():
