@@ -1,0 +1,5 @@
+set temp = get temp_label
+with water on temp:
+    wait until water_level is get water_level
+
+

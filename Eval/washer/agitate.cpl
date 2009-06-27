@@ -1,0 +1,4 @@
+with clutch on agitate:
+    with motor on get agitate_speed
+        wait how_long
+
