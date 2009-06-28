@@ -80,7 +80,8 @@ class App(object):
 
     def edit(self):
         if self.selected_word.filename:
-            subprocess.check_call(('gvim', '-f', self.selected_word.filename),
+            #subprocess.check_call(('gvim', '-f', self.selected_word.filename),
+            subprocess.check_call(('gedit', self.selected_word.filename),
                                   close_fds=True)
             with open(self.selected_word.filename) as f:
                 self.selected_word.file_contents = f.read()
