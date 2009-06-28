@@ -107,9 +107,17 @@ values (15, 4, 3, '');                  -- 'filename suffix'
 
 -- for 'to':
 insert into answer (id, question_id, word_id, answer)
-values (16, 4, 4, 'cpl');               -- 'filename suffix'
+values (16, 1, 4, 'argument');          -- 'question'
+    insert into answer (id, question_id, parent, word_id, answer)
+    values (17, 3, 16, 4, 'True');      -- 'repeatable'
+insert into answer (id, question_id, word_id, answer)
+values (18, 4, 4, 'cpl');               -- 'filename suffix'
 
 
 -- for 'task':
 insert into answer (id, question_id, word_id, answer)
-values (17, 4, 5, 'cpl');               -- 'filename suffix'
+values (19, 1, 5, 'argument');          -- 'question'
+    insert into answer (id, question_id, parent, word_id, answer)
+    values (20, 3, 19, 5, 'True');      -- 'repeatable'
+insert into answer (id, question_id, word_id, answer)
+values (21, 4, 5, 'cpl');               -- 'filename suffix'
