@@ -513,7 +513,7 @@ def create_subanswers(word_id, parent, question_id, qid_for_children,
                        values (?, ?, ?, ?, '')
                     """, (question_id, parent, position, word_id))
         id = cur.lastrowid
-        if debug: print "create_subanswer inserted", id
+        if debug: print "create_subanswers inserted", id
         cur.execute("""select answer.id,
                               ifnull(meta.id, answer.id),
                               ifnull(meta.answer, answer.answer),
@@ -530,7 +530,7 @@ def create_subanswers(word_id, parent, question_id, qid_for_children,
                     """, (qid_for_children, question_id, subquestion_qid,
                           repeatable_qid))
         for row in debug_iter(cur, "create_subanswers"):
-            create_subanswer(word_id, id, *row)
+            create_subanswers(word_id, id, *row)
 
 
 def run():

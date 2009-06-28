@@ -1,3 +1,4 @@
 with buzzer on:
-    wait how_long
+    wait how-long
+
 

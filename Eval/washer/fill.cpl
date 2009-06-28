@@ -1,5 +1,7 @@
-set temp = get temp_label
-with water on temp:
-    wait until water_level is get water_level
+set temp = get temp-label
+with water-on temp:
+    wait until water-level is get water-level
+
+
 
 
