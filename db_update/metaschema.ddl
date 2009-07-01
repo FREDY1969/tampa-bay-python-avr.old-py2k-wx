@@ -4,10 +4,10 @@ create table db_table (
     id integer not null,
     version int not null,
     table_name varchar(255) not null,
-    primary key (id, version),
     python_update varchar(4000),        -- python statements (source code)
                                         -- using 'db_cur' to update table
                                         -- run after data imported (if any).
+    primary key (id, version),
     unique (table_name, version)
 );
 

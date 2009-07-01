@@ -15,8 +15,11 @@ set -e
 dir="$1"
 db="$dir/$db_filename"
 
-# Save what's there first!
-backup "$db"
+if [ -e "$db" ]
+then
+    # Save what's there first!
+    db_update/backup "$db"
+fi
 
 # Nuke the database!
 rm -f "$db"
@@ -24,17 +27,21 @@ rm -f "$db"
 # Create a new database with the definitions for the two meta tables in it.
 sqlite3 "$db" < db_update/metaschema.ddl
 
-# Load the contents of the two meta tables.
-load_table.py -i "$db" db_update/db_table.csv db_update/db_column.csv
+# Load the coontents of the two meta tables.
+db_update/import_tables.py "$db" db_update/db_table.csv db_update/db_column.csv
 
 # Create the rest of the tables (from the meta tables).
-create_tables.py "$db"
+db_update/create_tables.py "$db"
 
 # Load the fixed contents that's the same for all projects.
-find db_update/fixed_data -name '*.csv' -exec load_table.py -i "$db" {} +
+find db_update/fixed_data -name '*.csv' \
+     -exec db_update/import_tables.py "$db" {} +
+
+exit
 
 # Reload the backup data.
-find "$dir/$db_backup_dir" -name '*.csv' -exec load_table.py "$db" {} +
+find "$dir/$db_backup_dir" -name '*.csv' \
+     -exec db_update/load_table.py "$db" {} +
 
 # Run table level python_update statements (if any).
-do_updates.py "$db"
+db_update/do_updates.py "$db"

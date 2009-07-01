@@ -1,11 +1,9 @@
 id	version	table_id	position	col_name	definition	python_default
-
 1	1	1	1	id	integer not null primary key	
 2	1	1	2	name	varchar(255) not null	
 3	1	1	3	kind	int not null references word(id)	
 4	1	1	4	defining_word	int not null default 0	
 5	1	1	5		unique (name)	
-
 6	1	2	1	id	integer not null primary key	
 7	1	2	2	question_id	int not null references answer(id)	
 8	1	2	3	parent	int references answer(id)	

@@ -43,14 +43,20 @@ def backup(id, dir, table_name, version, db_cur):
                    """, (id, version))
     col_names = map(lambda x: x[0], db_cur.fetchall())
     with open(os.path.join(dir, table_name + '.csv'), 'w') as f:
-        f.write("%s\n" % '\t'.join(col_names))
         tail = ''
         if 'fixed_data' in col_names: tail += " where fixed_data is null"
         if 'id' in col_names: tail += " order by id"
         db_cur.execute("""select %s from %s%s""" % (', '.join(col_names),
                                                     table_name, tail))
         for row in db_cur:
-            f.write("%s\n" % '\t'.join(map(str, row)))
+            f.write("----------------\n\n")
+            for col, data in zip(col_names, row):
+                f.write("%s\t%s\n\n" % (col, sql_literal(data)))
+
+def sql_literal(data):
+    if data is None: return "null"
+    if isinstance(data, str): return "'" + data.replace("'", "''") + "'"
+    return repr(data)
 
 
 if __name__ == "__main__":
