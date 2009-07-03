@@ -34,6 +34,7 @@ def run():
             db_cur.execute("""select id, table_name
                                 from db_table
                                where version = ?
+                               order by table_order
                            """, (New_version,))
             try:
                 for id, table_name in db_cur.fetchall():

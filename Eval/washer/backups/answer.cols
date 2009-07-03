@@ -1,0 +1,392 @@
+----------------
+
+id	1
+
+question_id	1
+
+parent	None
+
+position	1
+
+word_id	1
+
+answer	u'question'
+
+----------------
+
+id	2
+
+question_id	2
+
+parent	1
+
+position	2
+
+word_id	1
+
+answer	u'1'
+
+----------------
+
+id	3
+
+question_id	2
+
+parent	1
+
+position	1
+
+word_id	1
+
+answer	u'repeatable'
+
+----------------
+
+id	4
+
+question_id	1
+
+parent	None
+
+position	2
+
+word_id	1
+
+answer	u'filename suffix'
+
+----------------
+
+id	5
+
+question_id	3
+
+parent	1
+
+position	1
+
+word_id	1
+
+answer	u'True'
+
+----------------
+
+id	6
+
+question_id	3
+
+parent	3
+
+position	1
+
+word_id	1
+
+answer	u'False'
+
+----------------
+
+id	8
+
+question_id	3
+
+parent	4
+
+position	1
+
+word_id	1
+
+answer	u'False'
+
+----------------
+
+id	9
+
+question_id	4
+
+parent	None
+
+position	1
+
+word_id	1
+
+answer	u''
+
+----------------
+
+id	10
+
+question_id	1
+
+parent	None
+
+position	1
+
+word_id	2
+
+answer	u'value'
+
+----------------
+
+id	11
+
+question_id	3
+
+parent	10
+
+position	1
+
+word_id	2
+
+answer	u'False'
+
+----------------
+
+id	12
+
+question_id	4
+
+parent	None
+
+position	1
+
+word_id	2
+
+answer	u''
+
+----------------
+
+id	13
+
+question_id	1
+
+parent	None
+
+position	1
+
+word_id	3
+
+answer	u'initial value'
+
+----------------
+
+id	14
+
+question_id	3
+
+parent	13
+
+position	1
+
+word_id	3
+
+answer	u'False'
+
+----------------
+
+id	15
+
+question_id	4
+
+parent	None
+
+position	1
+
+word_id	3
+
+answer	u''
+
+----------------
+
+id	16
+
+question_id	4
+
+parent	None
+
+position	1
+
+word_id	4
+
+answer	u'cpl'
+
+----------------
+
+id	17
+
+question_id	4
+
+parent	None
+
+position	1
+
+word_id	5
+
+answer	u'cpl'
+
+----------------
+
+id	18
+
+question_id	1
+
+parent	None
+
+position	1
+
+word_id	5
+
+answer	u'argument'
+
+----------------
+
+id	19
+
+question_id	3
+
+parent	18
+
+position	1
+
+word_id	5
+
+answer	u'True'
+
+----------------
+
+id	20
+
+question_id	18
+
+parent	None
+
+position	1
+
+word_id	9
+
+answer	u'how-long'
+
+----------------
+
+id	21
+
+question_id	18
+
+parent	None
+
+position	1
+
+word_id	10
+
+answer	u'how-long'
+
+----------------
+
+id	22
+
+question_id	18
+
+parent	None
+
+position	1
+
+word_id	8
+
+answer	u'how-long'
+
+----------------
+
+id	23
+
+question_id	18
+
+parent	None
+
+position	1
+
+word_id	7
+
+answer	u'temp-label'
+
+----------------
+
+id	24
+
+question_id	1
+
+parent	None
+
+position	1
+
+word_id	4
+
+answer	u'argument'
+
+----------------
+
+id	25
+
+question_id	3
+
+parent	24
+
+position	1
+
+word_id	4
+
+answer	u'True'
+
+----------------
+
+id	26
+
+question_id	4
+
+parent	None
+
+position	2
+
+word_id	11
+
+answer	u'cpl'
+
+----------------
+
+id	27
+
+question_id	1
+
+parent	None
+
+position	1
+
+word_id	11
+
+answer	u'argument'
+
+----------------
+
+id	28
+
+question_id	3
+
+parent	27
+
+position	1
+
+word_id	11
+
+answer	u'True'
+
+----------------
+
+id	29
+
+question_id	27
+
+parent	None
+
+position	1
+
+word_id	12
+
+answer	u'temp'
+

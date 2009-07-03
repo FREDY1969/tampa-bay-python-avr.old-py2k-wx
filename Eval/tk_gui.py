@@ -54,7 +54,7 @@ class App(object):
         horz_pane = Pmw.PanedWidget(vert_pane.pane('word-view'),
                                     orient='vertical')
         horz_pane.pack(expand=1, fill='both')
-        horz_pane.add('top', min=200)
+        horz_pane.add('top', min=320)
         self.top_pane = Pmw.ScrolledFrame(horz_pane.pane('top'),
                                           horizflex='elastic',
                                           hscrollmode='none',
@@ -318,7 +318,7 @@ class answer(placeholder):
                       "repeatable", self.repeatable
 
     def __repr__(self):
-        return "<answer %s.%s[%s] = %s>" % \
+        return "<answer %s.%s[%s] = %r>" % \
                  (self.the_word.name, self.question_text, self.position,
                   self.text)
 
@@ -331,10 +331,10 @@ class answer(placeholder):
                     (the_word, parent, id, question_id)
             print "                qid_for_children %s, question_text %s," % \
                     (qid_for_children, question_text)
-            print "                repeatable %s, text %s, position %s" % \
+            print "                repeatable %s, text %r, position %s" % \
                     (repeatable, text, position)
 
-        if text is None:
+        if id is None:
             if repeatable == 'True':
                 return placeholder(the_word, parent, question_id,
                                    qid_for_children, question_text)
@@ -342,6 +342,7 @@ class answer(placeholder):
                 raise AssertionError("unanswered non-repeatable question: " +
                                        question_text)
 
+        if text is None: text = ''
         ans = cls(the_word, parent, id, question_id, qid_for_children,
                   question_text, text, position)
         if question_id in (question_qid, subquestion_qid) and text.isdigit():
@@ -452,7 +453,7 @@ class answer(placeholder):
         if cur_text != self.text:
             self.text = cur_text
             db_cur.execute("""update answer set answer = ? where id = ?""",
-                           (cur_text, self.id))
+                           (cur_text or None, self.id))
 
 def debug_iter(it, msg):
     if debug: print "debug_iter:", msg
@@ -509,8 +510,8 @@ def create_subanswers(word_id, parent, question_id, qid_for_children,
     if repeatable == 'True': return 
     with contextlib.closing(db_conn.cursor()) as cur:
         cur.execute("""insert into answer (question_id, parent, position,
-                                           word_id, answer)
-                       values (?, ?, ?, ?, '')
+                                           word_id)
+                       values (?, ?, ?, ?)
                     """, (question_id, parent, position, word_id))
         id = cur.lastrowid
         if debug: print "create_subanswers inserted", id

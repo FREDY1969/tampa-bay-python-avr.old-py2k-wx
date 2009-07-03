@@ -17,8 +17,11 @@ db="$dir/$db_filename"
 
 if [ -e "$db" ]
 then
-    # Save what's there first!
-    db_update/backup "$db"
+    if [ `find -H "$dir/$db_backup_dir" -type f \! -newer "$db" | wc -l` -ne 0 ]
+    then
+        echo "You did not backup your database first!" >&2
+        exit 1
+    fi
 fi
 
 # Nuke the database!
@@ -37,10 +40,8 @@ db_update/create_tables.py "$db"
 find db_update/fixed_data -name '*.csv' \
      -exec db_update/import_tables.py "$db" {} +
 
-exit
-
 # Reload the backup data.
-find "$dir/$db_backup_dir" -name '*.csv' \
+find "$dir/$db_backup_dir" -name '*.cols' \
      -exec db_update/load_table.py "$db" {} +
 
 # Run table level python_update statements (if any).
