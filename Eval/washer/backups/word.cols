@@ -1,0 +1,120 @@
+----------------
+
+id	1
+
+name	u'compiler'
+
+kind	1
+
+defining_word	1
+
+----------------
+
+id	2
+
+name	u'const'
+
+kind	1
+
+defining_word	1
+
+----------------
+
+id	3
+
+name	u'var'
+
+kind	1
+
+defining_word	1
+
+----------------
+
+id	4
+
+name	u'to'
+
+kind	1
+
+defining_word	1
+
+----------------
+
+id	5
+
+name	u'task'
+
+kind	1
+
+defining_word	1
+
+----------------
+
+id	6
+
+name	u'wash'
+
+kind	5
+
+defining_word	0
+
+----------------
+
+id	7
+
+name	u'fill'
+
+kind	5
+
+defining_word	0
+
+----------------
+
+id	8
+
+name	u'agitate'
+
+kind	5
+
+defining_word	0
+
+----------------
+
+id	9
+
+name	u'spin'
+
+kind	5
+
+defining_word	0
+
+----------------
+
+id	10
+
+name	u'buzz'
+
+kind	5
+
+defining_word	0
+
+----------------
+
+id	11
+
+name	u'start-stop'
+
+kind	1
+
+defining_word	1
+
+----------------
+
+id	12
+
+name	u'water-on'
+
+kind	11
+
+defining_word	0
+

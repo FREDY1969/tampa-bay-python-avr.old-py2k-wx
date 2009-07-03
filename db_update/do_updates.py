@@ -8,8 +8,13 @@ import os.path
 import contextlib
 import sqlite3 as db
 
+Db_backups_dir = 'backups'
+
 def get_backup_version(db_file):
-    with open(os.path.join(os.path.split(db_file)[0], 'version')) as f:
+    with open(os.path.join(os.path.split(db_file)[0],
+                           Db_backups_dir,
+                           'version')) \
+      as f:
         return int(f.readline().strip())
 
 def get_max_version(db_cur):
@@ -36,9 +41,11 @@ def run():
                                                 where id = new_table.id
                                                   and version = ?)
                                  and new_table.python_update is not null
+                               order by new_table.table_order
                            """, (New_version, Backup_version))
             try:
                 for python_update in db_cur.fetchall():
+                    print "got:", python_update
                     exec python_update
             except Exception:
                 db_conn.rollback()

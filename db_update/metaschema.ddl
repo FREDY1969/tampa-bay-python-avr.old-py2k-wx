@@ -4,6 +4,7 @@ create table db_table (
     id integer not null,
     version int not null,
     table_name varchar(255) not null,
+    table_order int not null,
     python_update varchar(4000),        -- python statements (source code)
                                         -- using 'db_cur' to update table
                                         -- run after data imported (if any).

@@ -23,6 +23,15 @@ def run():
     with contextlib.closing(db.connect(db_file)) as db_conn:
         with contextlib.closing(db_conn.cursor()) as db_cur: 
             New_version = get_max_version(db_cur)
+            db_cur.execute("""select table_name, table_order from db_table
+                               where version = ?
+                               order by table_order
+                           """, (New_version,))
+            order_dict = dict(db_cur)
+            order_dict['db_table'] = -2
+            order_dict['db_column'] = -1
+            csv_files.sort(key=lambda csv_file:
+                                   order_dict[get_table_name(csv_file)])
             try:
                 for csv_file in csv_files:
                     import_file(csv_file, db_cur)
@@ -31,15 +40,18 @@ def run():
                 raise
             db_conn.commit()
 
+def get_table_name(csv_file):
+    return os.path.split(csv_file)[1][:-4]
+
 def import_file(csv_file, db_cur):
     with open(csv_file) as f:
-        table_name = os.path.split(csv_file)[1][:-4]
+        table_name = get_table_name(csv_file)
         col_names = f.readline().split('\t')
 
         for line in f:
             row = [(None if col == '' else col)
                    for col in line.rstrip('\r\n').split('\t')]
-            print "row:", row
+            #print "row:", row
             db_cur.execute("""insert into %s (%s) values (%s)""" % 
                              (table_name, ', '.join(col_names),
                               ', '.join('?' * len(col_names))),
