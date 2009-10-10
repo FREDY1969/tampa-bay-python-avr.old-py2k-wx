@@ -59,6 +59,13 @@ class WordTreeCtrl(wx.TreeCtrl):
             self.Expand(node)
     
     def onActivate(self, e):
+        
+        # check state of word to see if it needs to be saved
+        
+        Registry.app.saveWord()
+        
+        # open/paint new word
+        
         Registry.currentWord = self.GetItemPyData(e.GetItem())
 
         # figure out path to word text file
